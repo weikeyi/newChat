@@ -1,9 +1,12 @@
 <script setup lang="ts">
-import Main from './components/Main.vue'
+
 </script>
 
 <template>
-  <Main />
+  <div>
+    <RouterView></RouterView>
+  </div>
+
 </template>
 
 <style scoped>
