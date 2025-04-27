@@ -223,13 +223,12 @@ watch(
       if (history) {
         messages.value = history;
       } else {
-        messages.value = [
-        ];
+        messages.value = [];
       }
     }
   },
   { immediate: true }
-)
+);
 watch(
   messages,
   () => {

@@ -4,12 +4,19 @@ import type { RouteRecordRaw } from 'vue-router'
 
 const routers:Array<RouteRecordRaw> = [
     {
-        path: '/login',
+        path: '/',
+        name:'Login',
         component:()=> import('../components/Login.vue')
     },
     {
         path: '/main',
+        name:'Main',
         component:()=> import('../components/Main.vue')
+    },
+    {
+        path: '/register',
+        name:'Register',
+        component:()=> import('../components/Register.vue')
     }
 ]
 
@@ -18,4 +25,4 @@ const router = createRouter({
     routes: routers
   })
   
-  export default router
+export default router
