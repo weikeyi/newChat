@@ -20,6 +20,7 @@ export type StoreConversationMap = Record<UserId,UserConversations>
 
 //会话列表项的类型
 export interface ConversationListItem {
-    key:ConversationId,
+    key:string,
     label:string
 }
+

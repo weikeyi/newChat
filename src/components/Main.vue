@@ -2,11 +2,15 @@
     import type {
         AttachmentsProps,
         BubbleListProps,
-        BubbleProps,
-        ConversationsProps,
+        // ConversationsProps,
+        // BubbleProps, // 如果 renderMarkdown 直接在 Bubble.List 中使用，可能不需要导入
     } from 'ant-design-x-vue'
-
-    import { CloudUploadOutlined, PaperClipOutlined, PlusOutlined } from '@ant-design/icons-vue'
+    import {
+        CloudUploadOutlined,
+        PaperClipOutlined,
+        PlusOutlined,
+        // UserOutlined,
+    } from '@ant-design/icons-vue'
     import { Badge, Button, Flex, Typography, theme } from 'ant-design-vue'
     import {
         Attachments,
@@ -16,24 +20,27 @@
         Sender,
         useXAgent,
         useXChat,
-        XStream,
+        // XStream, // 已移至 aiService
     } from 'ant-design-x-vue'
-    import { computed, onMounted, ref, watch } from 'vue'
-    import { h } from 'vue'
-    import { UserOutlined } from '@ant-design/icons-vue'
-    import { useChatStore } from '../stores/chat'
-    import markdownit from 'markdown-it'
-    import getUserId from '../until/getUserId'
+    import { computed, onMounted, ref, h } from 'vue'
 
-    const md = markdownit({ html: true, breaks: true })
-    //实现md
-    const renderMarkdown: BubbleProps['messageRender'] = content =>
-        h(Typography, null, {
-            default: () => h('div', { innerHTML: md.render(content) }),
-        })
+    // 重构后的导入
+    // import { useChatStore } from '../stores/chat'; // 已在 useChatManager 中使用
+    // import { renderMarkdown } from '../utils/markdownUtils'
+    import { getHeader } from '../utils/apiUtils'
+    // import getUserId from '../utils/getUserId'; // 现在在 useChatManager 内部使用
+    import { roles as chatRoles } from '../config/chatConfig' // 重命名以避免冲突
+    import { streamAIChatResponse } from '../services/aiService'
+    import { useChatManager } from '../composables/useChatManager'
+    // import { useChatStyles } from '../composables/useChatStyles'; // 如果你创建了这个文件
 
-    const { token } = theme.useToken()
+    defineOptions({ name: 'PlaygroundIndependentSetup' })
 
+    const { token } = theme.useToken() // Ant Design 的 token
+
+    // 使用可组合函数处理样式 (或者如果简单则直接定义)
+    // const styles = useChatStyles(token);
+    // 如果没有创建 useChatStyles，为简单起见，直接定义:
     const styles = computed(() => {
         return {
             layout: {
@@ -52,11 +59,7 @@
                 display: 'flex',
                 'flex-direction': 'column',
             },
-            conversations: {
-                padding: '0 12px',
-                flex: 1,
-                'overflow-y': 'auto',
-            },
+            conversations: { padding: '0 12px', flex: 1, 'overflow-y': 'auto' },
             chat: {
                 background: `${token.value.colorFillQuaternary}`,
                 height: '100%',
@@ -69,19 +72,9 @@
                 padding: `${token.value.paddingLG}px`,
                 gap: '16px',
             },
-            messages: {
-                flex: 1,
-            },
-            placeholder: {
-                'padding-top': '32px',
-                'text-align': 'left',
-                flex: 1,
-            },
-            sender: {
-                'box-shadow': token.value.boxShadow,
-                'max-width': '700px',
-                margin: '0 auto',
-            },
+            messages: { flex: 1 },
+            placeholder: { 'padding-top': '32px', 'text-align': 'left', flex: 1 },
+            sender: { 'box-shadow': token.value.boxShadow, 'max-width': '700px', margin: '0 auto' },
             logo: {
                 display: 'flex',
                 height: '72px',
@@ -90,11 +83,7 @@
                 padding: '0 24px',
                 'box-sizing': 'border-box',
             },
-            'logo-img': {
-                width: '24px',
-                height: '24px',
-                display: 'inline-block',
-            },
+            'logo-img': { width: '24px', height: '24px', display: 'inline-block' },
             'logo-span': {
                 display: 'inline-block',
                 margin: '0 8px',
@@ -111,14 +100,6 @@
         } as const
     })
 
-    defineOptions({ name: 'PlaygroundIndependentSetup' })
-
-    // const sleep = () => new Promise(resolve => setTimeout(resolve, 500))
-
-    // function renderTitle(icon: VNode, title: string) {
-    //   return h(Space, { align: 'start' }, [icon, h('span', title)])
-    // }
-
     const placeholderNode = computed(() =>
         h(Welcome, {
             variant: 'borderless',
@@ -126,259 +107,134 @@
             title: '欢迎来到这里！',
             description:
                 '很高兴能与您相遇。无论您是想获取信息、解决问题，还是单纯想聊聊天，我都在这里陪伴您。请随时提出您的需求，我会尽最大努力为您提供帮助。让我们一起开启一段愉快的交流吧！😊',
-            // extra: h(Space, {}, )
         })
     )
 
-    const roles: BubbleListProps['roles'] = {
-        ai: {
-            placement: 'start',
-            avatar: {
-                icon: h(UserOutlined),
-                style: {
-                    color: '#f56a00',
-                    backgroundColor: '#fde3cf',
-                },
-            },
-            typing: { step: 5, interval: 20 },
-            messageRender: renderMarkdown,
-            styles: {
-                content: {
-                    borderRadius: '16px',
-                },
-            },
-        },
-        local: {
-            placement: 'end',
-            avatar: {
-                icon: h(UserOutlined),
-                style: {
-                    color: '#fff',
-                    backgroundColor: '#87d068',
-                },
-            },
-            variant: 'shadow',
-        },
-    }
-
-    // ==================== State ====================
-    const chatStore = useChatStore()
-    const currentUserId = ref<number | null>(null)
-
+    // 由组件直接管理的UI特定状态
     const headerOpen = ref(false)
-    const content = ref('')
-    const conversationsItems = ref<ConversationsProps['items']>([])
-    const activeKey = ref()
+    const content = ref('') // Sender 输入框的内容
     const attachedFiles = ref<AttachmentsProps['items']>([])
-    const agentRequestLoading = ref(false)
+    const agentRequestLoading = ref(false) // Agent 请求加载状态
 
-    // ==================== Runtime ====================
-    const getHeader = () => {
-        const token = localStorage.getItem('token')
-        return {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`,
-        }
-    }
-
+    // 设置 Agent
     const [agent] = useXAgent({
         request: async ({ message }, { onSuccess, onError, onUpdate }) => {
+            agentRequestLoading.value = true // 设置加载状态
             try {
-                const response = await fetch('http://localhost:3000/ai/chat', {
-                    method: 'POST',
-                    headers: getHeader(),
-                    body: JSON.stringify({ content: message }),
-                })
-
-                // 用于拼接最终完整文本
                 let reasoningText = ''
                 let outputText = ''
 
-                // 逐块读取 SSE 流
-                for await (const chunk of XStream({
-                    readableStream: response.body as ReadableStream<Uint8Array>,
-                })) {
-                    if (chunk.data == '[DONE]') {
+                // 使用从 aiService 导入的异步生成器
+                for await (const streamEvent of streamAIChatResponse(message as string, getHeader())) {
+                    if (streamEvent.type === 'done') {
+                        // 拼接最终完整文本
                         const fullMarkdown = [
                             reasoningText ? `> ${reasoningText.replace(/\n/g, '\n> ')}` : '',
                             outputText,
                         ]
                             .filter(Boolean)
                             .join('\n\n')
-
                         onSuccess?.(fullMarkdown)
                         break
                     }
 
-                    const raw = JSON.parse(chunk.data)
-                    if (!raw) continue
-                    try {
-                        // 只需要解析一次
-                        const parsedChunk = JSON.parse(chunk.data)
-                        if (!parsedChunk) continue
-                        const delta = parsedChunk.content
-                        if (!delta) continue
+                    if (streamEvent.type === 'error') {
+                        onError?.(streamEvent.payload)
+                        break
+                    }
+
+                    if (streamEvent.type === 'data') {
+                        const parsedChunk = streamEvent.payload
+                        // 确保 parsedChunk 和 content 有效
+                        if (!parsedChunk || typeof parsedChunk.content !== 'string') continue
 
                         if (parsedChunk.type === 'reasoning') {
-                            reasoningText += delta
+                            reasoningText += parsedChunk.content
                         } else if (parsedChunk.type === 'output') {
-                            outputText += delta
+                            outputText += parsedChunk.content
                         }
 
-                        // 实时组合展示（optional）
+                        // 实时组合展示
                         const liveMarkdown = [
                             reasoningText ? `> ${reasoningText.replace(/\n/g, '\n> ')}` : '',
                             outputText,
                         ]
                             .filter(Boolean)
                             .join('\n\n')
-
                         onUpdate?.(liveMarkdown)
-                    } catch (err) {
-                        console.warn('JSON parse error: ', raw)
                     }
                 }
             } catch (err: any) {
-                console.error('[agent error]', err)
-                onError?.(err.message || 'Server error')
+                // 捕获 streamAIChatResponse 本身可能抛出的未处理错误
+                console.error('[Agent 请求包装器错误]', err)
+                onError?.(err.message || 'Agent 请求中发生未处理的错误')
+            } finally {
+                agentRequestLoading.value = false // 清除加载状态
             }
         },
     })
 
-    const { onRequest, messages ,setMessages:setXChatMessages} = useXChat({
+    // 设置 XChat (提供响应式的 messages 数组)
+    const {
+        onRequest,
+        messages,
+        setMessages: setXChatMessages,
+    } = useXChat({
         agent: agent.value,
     })
 
-    async function initializeUserSession() {
-        try {
-            currentUserId.value = getUserId()
-            console.log('当前ID:' + currentUserId.value)
-            await loadUserConversation()
-            if (activeKey.value) {
-                await loadMessagesForActiveConversation(activeKey.value)
-            } else {
-            }
-        } catch (error: any) {
-            console.error('初始化用户会话失败:', error.message)
-            currentUserId.value = null
-            conversationsItems.value = []
-            setXChatMessages([]) // 清空 useXChat 的消息
-            activeKey.value = undefined
-            // authError.value = error.message || '身份认证失败，请检查登录状态。'
-        }
-    }
-    async function loadUserConversation(){
-        if(!currentUserId.value){
-            return
-        }
-        try {
-            const userConvs = await chatStore.getConversationListForCurrentUser()
-            conversationsItems.value = userConvs
-            console.log("加载的会话列表：",userConvs)
+    // 设置聊天管理器可组合函数
+    const {
+        // currentUserId, // 由 useChatManager 暴露，但这里可能不需要直接使用
+        conversationsItems,
+        activeKey,
+        initializeUserSession,
+        handleAddConversation, // 从 composable 获取的方法
+        handleConversationClick, // 从 composable 获取的方法
+    } = useChatManager(setXChatMessages,messages) // 传入 setXChatMessages 回调
 
-            if(userConvs.length>0){
-                if (userConvs.length > 0) {
-            // 检查当前 activeKey 是否在新的会话列表中有效
-            const currentActiveKeyIsValid = userConvs.some(c => c.key === activeKey.value);
-            if (!activeKey.value || !currentActiveKeyIsValid) {
-                // 如果 activeKey 无效或未设置，则默认激活第一个会话
-                activeKey.value = userConvs[0].key;
-            }
-            // 注意：activeKey 的变化会由其 watcher 处理，进而加载消息
-        } else {
-            // 如果用户没有会话
-            activeKey.value = undefined;
-        }
-            }
-
-        }catch{
-
-        }
-    }
-
-    onMounted(()=>{
+    // 组件挂载后初始化用户会话
+    onMounted(() => {
         initializeUserSession()
     })
 
-// 新增或修改的 activeKey watcher
-watch(activeKey, async (newActiveKey) => {
-    console.log('activeKey 变化:', newActiveKey);
-    if (newActiveKey !== undefined && currentUserId.value) {
-        await loadMessagesForActiveConversation(newActiveKey);
-    } else if (newActiveKey === undefined) {
-        setXChatMessages([]); // 如果没有激活的会话，清空消息
-    }
-}, { immediate: true }); // immediate 确保初始 activeKey (如果存在) 的消息被加载
-
-async function loadMessagesForActiveConversation(conversationIdToLoad: string) {
-    if (!currentUserId.value) {
-        console.warn("无法加载消息，当前用户ID未知。");
-        setXChatMessages([]);
-        return;
-    }
-    console.log(`为会话 ${conversationIdToLoad} 加载消息 (用户: ${currentUserId.value})`);
-    try {
-        const history = await chatStore.getMessages(Number(conversationIdToLoad)); // store action
-        console.log('从store获取的历史消息:', history);
-        setXChatMessages(history ? [...history] : []); // 更新 useXChat 的消息列表
-    } catch (error: any) {
-        console.error(`为会话 ${conversationIdToLoad} 加载消息失败:`, error.message);
-        setXChatMessages([]);
-    }
-}
-    // watch(
-    //     messages,
-    //     () => {
-    //         if (activeKey.value !== undefined) {
-    //             chatStore.setMessages(activeKey.value, messages.value)
-    //         }
-    //     },
-    //     { deep: true }
-    // )
-
-    // ==================== Event ====================
-    function onSubmit(nextContent: string) {
-        if (!nextContent) return
-        onRequest(nextContent)
-        content.value = ''
+    // 模板事件处理器
+    function onSubmitMessage(nextContent: string) {
+        if (!nextContent.trim()) return // 避免发送空消息
+        onRequest(nextContent) // 调用 useXChat 提供的 onRequest
+        content.value = '' // 清空输入框
     }
 
-    async function onAddConversation() {
-    if (!currentUserId.value) {
-        return;
+    function onNewConversation() {
+        handleAddConversation() // 调用 composable 中的方法
     }
-    try {
-        const newConv = await chatStore.addNewConversationForCurUser(/* 可选的 customLabel */);
-        console.log('Store中创建的新会话:', newConv);
-        // 重新从 store 加载会话列表以包含新创建的会话
-        await loadUserConversation();
-        // 激活新创建的会话 (如果 loadUserConversations 没有自动激活它)
-        if (newConv && newConv.key) {
-             activeKey.value = newConv.key;
+
+    function onSwitchConversation(newKey: string | number | undefined) {
+        if (newKey !== undefined) {
+            // 确保 key 不是 undefined
+            handleConversationClick(String(newKey)) // 调用 composable 中的方法，确保是 string
         }
-    } catch (error: any) {
-        console.error("添加新会话失败:", error.message);
     }
-}
-
-    const onConversationClick: ConversationsProps['onActiveChange'] = (newKey) => {
-    if (activeKey.value !== newKey) {
-        console.log('点击切换会话到:', newKey);
-        activeKey.value = newKey; // activeKey 的 watcher 将处理消息加载
-    }
-};
 
     const handleFileChange: AttachmentsProps['onChange'] = info =>
-        (attachedFiles.value = info.fileList)
+        (attachedFiles.value = info.fileList || []) // 确保 fileList 存在
 
-    const items = computed<BubbleListProps['items']>(() => {
-        if (messages.value.length === 0) {
+    // 为 Bubble.List 计算 items
+    const bubbleListItems = computed<BubbleListProps['items']>(() => {
+        // 如果有激活的对话但消息为空，显示 placeholderNode
+        if (messages.value.length === 0 && activeKey.value !== undefined) {
             return [{ content: placeholderNode, variant: 'borderless' }]
         }
+        // 如果没有激活的对话 (例如，刚加载还没有对话，或者所有对话被删除)
+        if (messages.value.length === 0 && activeKey.value === undefined) {
+            return [{ content: placeholderNode, variant: 'borderless' }] // 或者显示一个通用的欢迎信息
+        }
         return messages.value.map(({ id, message, status }) => ({
-            key: id,
-            role: status === 'local' ? 'local' : 'ai',
+            key: String(id), // 确保 key 是字符串
+            role: status === 'local' ? 'local' : 'ai', // 根据 status 判断角色
             content: message,
+            // 如果 renderMarkdown 是全局应用，则不需要在这里指定 messageRender
+            // 如果是按角色指定，则 chatRoles 中已包含
         }))
     })
 </script>
@@ -386,7 +242,6 @@ async function loadMessagesForActiveConversation(conversationIdToLoad: string) {
 <template>
     <div :style="styles.layout">
         <div :style="styles.menu">
-            <!-- 🌟 Logo -->
             <div :style="styles.logo">
                 <img
                     src="https://mdn.alipayobjects.com/huamei_iwk9zp/afts/img/A*eco6RrQhxbMAAAAAAAAAAAAADgCCAQ/original"
@@ -397,38 +252,33 @@ async function loadMessagesForActiveConversation(conversationIdToLoad: string) {
                 <span :style="styles['logo-span']">Ant Design X Vue</span>
             </div>
 
-            <!-- 🌟 添加会话 -->
-            <Button type="link" :style="styles.addBtn" @click="onAddConversation">
+            <Button type="link" :style="styles.addBtn" @click="onNewConversation">
                 <PlusOutlined />
                 New Conversation
             </Button>
 
-            <!-- 🌟 会话管理 -->
             <Conversations
-                :items="curUserConversation"
+                :items="conversationsItems"
                 :style="styles.conversations"
                 :active-key="activeKey"
-                @active-change="onConversationClick"
+                @active-change="onSwitchConversation"
             />
         </div>
 
         <div :style="styles.chat">
-            <!-- 🌟 消息列表 -->
-            <Bubble.List :items="items" :roles="roles" :style="styles.messages" />
+            <Bubble.List :items="bubbleListItems" :roles="chatRoles" :style="styles.messages" />
 
             <Sender
                 :value="content"
                 :style="styles.sender"
                 :loading="agentRequestLoading"
-                @submit="onSubmit"
+                @submit="onSubmitMessage"
                 @change="value => (content = value)"
             >
                 <template #prefix>
                     <Badge :dot="attachedFiles.length > 0 && !headerOpen">
                         <Button type="text" @click="() => (headerOpen = !headerOpen)">
-                            <template #icon>
-                                <PaperClipOutlined />
-                            </template>
+                            <template #icon><PaperClipOutlined /></template>
                         </Button>
                     </Badge>
                 </template>
