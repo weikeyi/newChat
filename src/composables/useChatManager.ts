@@ -23,10 +23,12 @@ export function useChatManager(setXChatMessages: SetXChatMessagesFn,chatMessageF
     const activeKey = ref<string | undefined>()
 
     const mapUIMessageToStoreMessage = (uiMsg: XChatMessage): XChatMessage => {
+        // console.log('映射消息:', uiMsg);
+        
         let storeStatus: XChatMessage['status'] = 'loading';
-        if (uiMsg.role === 'user' || uiMsg.status === 'local') {
+        if ( uiMsg.status === 'local') {
             storeStatus = 'local';
-        } else if (uiMsg.role === 'assistant' || uiMsg.role === 'ai') {
+        } else if (uiMsg.role === 'ai') {
             if (/* ant-x-vue success status */ uiMsg.status === 'success') {
                 storeStatus = 'success';
             } else if (uiMsg.status === 'error') {
@@ -48,9 +50,9 @@ export function useChatManager(setXChatMessages: SetXChatMessagesFn,chatMessageF
     watch(
         chatMessageFromX,
         (newMessages, oldMessages) => {
-            console.log('XChat消息变化:', newMessages)
+            // console.log('XChat消息变化:', newMessages)
             // 仅当新消息与旧消息不同时才更新
-            console.log(`深度监听到消息变化，对话ID: ${activeKey.value}。准备保存...`);
+            // console.log(`深度监听到消息变化，对话ID: ${activeKey.value}。准备保存...`);
 
             if (activeKey.value !== undefined) {
                 const messagesToStore: XChatMessage[] = newMessages.map(mapUIMessageToStoreMessage);
@@ -67,13 +69,13 @@ export function useChatManager(setXChatMessages: SetXChatMessagesFn,chatMessageF
             setXChatMessages([])
             return
         }
-        console.log(`为对话 ${conversationIdToLoad} 加载消息 (用户: ${currentUserId.value})`)
+        // console.log(`为对话 ${conversationIdToLoad} 加载消息 (用户: ${currentUserId.value})`)
         try {
             const history = await chatStore.getMessages(Number(conversationIdToLoad)) // 从 store 获取历史消息
-            console.log('从store获取的历史消息:', history)
+            // console.log('从store获取的历史消息:', history)
             setXChatMessages(history ? [...history] : []) // 更新 useXChat 的消息列表
         } catch (error: any) {
-            console.error(`为对话 ${conversationIdToLoad} 加载消息失败:`, error.message)
+            // console.error(`为对话 ${conversationIdToLoad} 加载消息失败:`, error.message)
             setXChatMessages([])
         }
     }
@@ -84,7 +86,7 @@ export function useChatManager(setXChatMessages: SetXChatMessagesFn,chatMessageF
         try {
             const userConvs = await chatStore.getConversationListForCurrentUser(currentUserId.value)
             conversationsItems.value = userConvs
-            console.log('加载的对话列表：', userConvs)
+            // console.log('加载的对话列表：', userConvs)
 
             if (userConvs.length > 0) {
                 // 检查当前 activeKey 是否在新的对话列表中有效
@@ -101,7 +103,7 @@ export function useChatManager(setXChatMessages: SetXChatMessagesFn,chatMessageF
                 setXChatMessages([]) // 没有对话，清空消息
             }
         } catch (error: any) {
-            console.error('加载用户对话列表失败:', error.message)
+            // console.error('加载用户对话列表失败:', error.message)
             conversationsItems.value = []
             activeKey.value = undefined
             setXChatMessages([])
@@ -114,7 +116,7 @@ export function useChatManager(setXChatMessages: SetXChatMessagesFn,chatMessageF
             const userId = getUserId() // 假设此函数可能抛出错误或返回 null
             if (userId === null) throw new Error('无法确定用户ID。')
             currentUserId.value = userId
-            console.log('当前用户ID:' + currentUserId.value)
+            // console.log('当前用户ID:' + currentUserId.value)
             await loadUserConversations()
             // 活动对话的消息将由 activeKey 侦听器加载
         } catch (error: any) {
@@ -131,7 +133,7 @@ export function useChatManager(setXChatMessages: SetXChatMessagesFn,chatMessageF
     watch(
         activeKey,
         async (newActiveKey, oldActiveKey) => {
-            console.log('activeKey 变化:', newActiveKey)
+            // console.log('activeKey 变化:', newActiveKey)
             // 仅当 newActiveKey 有效且与旧值不同时才加载
             if (newActiveKey !== undefined && newActiveKey !== oldActiveKey) {
                 await loadMessagesForActiveConversation(String(newActiveKey))
@@ -151,7 +153,7 @@ export function useChatManager(setXChatMessages: SetXChatMessagesFn,chatMessageF
         }
         try {
             const newConv = await chatStore.addNewConversationForCurUser()
-            console.log('Store中创建的新对话:', newConv)
+            // console.log('Store中创建的新对话:', newConv)
             await loadUserConversations() // 重新加载以获取新的列表
             // 激活新创建的对话
             if (newConv && newConv.key) {
@@ -165,7 +167,7 @@ export function useChatManager(setXChatMessages: SetXChatMessagesFn,chatMessageF
     // 处理对话点击事件的逻辑
     const handleConversationClick: ConversationsProps['onActiveChange'] = newKey => {
         if (activeKey.value !== newKey && newKey !== undefined) {
-            console.log('点击切换会话到:', newKey)
+            // console.log('点击切换会话到:', newKey)
             activeKey.value = String(newKey) // activeKey 的 watcher 将处理消息加载
         }
     }

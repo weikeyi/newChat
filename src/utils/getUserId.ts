@@ -4,7 +4,7 @@ export default function getUserId(){
     const token = localStorage.getItem('token')!
     const payload: {useId:number} = jwtDecode(token)
     const userId = payload.useId
-    console.log(userId);
+    // console.log(userId);
     
     return userId
 }
